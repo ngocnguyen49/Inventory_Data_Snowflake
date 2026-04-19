@@ -11,13 +11,9 @@ USE WAREHOUSE PIPELINE_WH;
 -- ============================================================
 -- STEP 1: Upload your CSV file
 -- ============================================================
--- Option A (Snowflake UI — easiest):
+-- Method
 --   Go to Data → Databases → PIPELINE_DB → RAW → Stages → CSV_STAGE
 --   Click "+ Files" and upload your CSV
---
--- Option B (SnowSQL CLI in your terminal):
---   snowsql -a <your_account> -u <your_user>
---   PUT 'file:///path/to/your/orders.csv' @csv_stage AUTO_COMPRESS=TRUE OVERWRITE=TRUE;
 
 -- ============================================================
 -- STEP 2: Confirm the file is in the stage
