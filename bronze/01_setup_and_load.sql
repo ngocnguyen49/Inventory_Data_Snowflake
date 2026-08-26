@@ -1,4 +1,4 @@
-- ============================================================
+-- ============================================================
 -- BRONZE LAYER: Automated Setup and S3 Load
 -- Purpose: Create infrastructure, infer CSV schema dynamically from S3, 
 --          and load raw data into Snowflake as an exact replica.
