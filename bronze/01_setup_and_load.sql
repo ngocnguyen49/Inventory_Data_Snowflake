@@ -1,8 +1,8 @@
--- ============================================================
--- BRONZE LAYER: Setup and Load
--- Purpose: Create infrastructure and load raw CSV into Snowflake
---          exactly as-is — no transformations, full audit trail
--- Output:  RAW.raw_orders (all 23 columns as STRING)
+- ============================================================
+-- BRONZE LAYER: Automated Setup and S3 Load
+-- Purpose: Create infrastructure, infer CSV schema dynamically from S3, 
+--          and load raw data into Snowflake as an exact replica.
+-- Output:  RAW.raw_orders (dynamically inferred columns)
 -- ============================================================
 
 -- ── Database and Schema Setup ────────────────────────────────
@@ -21,70 +21,49 @@ CREATE WAREHOUSE IF NOT EXISTS PIPELINE_WH
 USE WAREHOUSE PIPELINE_WH;
 USE SCHEMA RAW;
 
--- ── Internal Stage ───────────────────────────────────────────
-CREATE STAGE IF NOT EXISTS csv_stage
-    FILE_FORMAT = (
-        TYPE                         = 'CSV'
-        FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-        SKIP_HEADER                  = 1
-        NULL_IF                      = ('NULL', 'null', '')
-        EMPTY_FIELD_AS_NULL          = TRUE
-        DATE_FORMAT                  = 'AUTO'
-        TIMESTAMP_FORMAT             = 'AUTO'
+-- ── External S3 Stage Setup ──────────────────────────────────
+-- Replace placeholders with your S3 URI and AWS IAM credentials
+CREATE OR REPLACE STAGE RAW.s3_csv_stage
+    URL = 's3://your-bucket-name/path/to/files/'
+    CREDENTIALS = (
+        AWS_KEY_ID = 'YOUR_AWS_ACCESS_KEY_ID'
+        AWS_SECRET_KEY = 'YOUR_AWS_SECRET_ACCESS_KEY'
     );
 
--- ── Bronze Table (all columns as STRING — no transformations) ─
--- Preserves original data exactly as received from source
--- Never update or delete from this table — append only
-CREATE TABLE IF NOT EXISTS RAW.raw_orders (
-    row_id              STRING,
-    order_id            STRING,
-    order_date          STRING,
-    ship_date           STRING,
-    ship_mode           STRING,
-    customer_id         STRING,
-    customer_name       STRING,
-    segment             STRING,
-    country             STRING,
-    city                STRING,
-    state               STRING,
-    postal_code         STRING,
-    region              STRING,
-    retail_sales_people STRING,
-    product_id          STRING,
-    category            STRING,
-    sub_category        STRING,
-    product_name        STRING,
-    returned            STRING,
-    sales               STRING,
-    quantity            STRING,
-    discount            STRING,
-    profit              STRING,
-    _loaded_at          TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
-);
-
--- ── Load CSV into Bronze ──────────────────────────────────────
--- Run this after uploading CSV to stage via:
--- PUT file://path/to/sample_data.csv @csv_stage;
-COPY INTO RAW.raw_orders (
-    row_id, order_id, order_date, ship_date, ship_mode,
-    customer_id, customer_name, segment, country, city,
-    state, postal_code, region, retail_sales_people,
-    product_id, category, sub_category, product_name,
-    returned, sales, quantity, discount, profit
-)
-FROM @csv_stage
-FILE_FORMAT = (
+-- ── Named File Format Setup ───────────────────────────────────
+-- Required for INFER_SCHEMA to accurately parse headers and fields
+CREATE OR REPLACE FILE FORMAT RAW.csv_format
     TYPE                         = 'CSV'
     FIELD_OPTIONALLY_ENCLOSED_BY = '"'
     SKIP_HEADER                  = 1
     NULL_IF                      = ('NULL', 'null', '')
-    EMPTY_FIELD_AS_NULL          = TRUE
-)
-ON_ERROR = 'CONTINUE';
--- ON_ERROR = CONTINUE logs bad rows without stopping the load
--- Review load errors with: SELECT * FROM TABLE(VALIDATE(raw_orders, JOB_ID => '_last'));
+    EMPTY_FIELD_AS_NULL          = TRUE;
 
--- ── Verify Bronze load ────────────────────────────────────────
-SELECT COUNT(*)    AS total_rows_loaded FROM RAW.raw_orders;
-SELECT *           FROM RAW.raw_orders LIMIT 5;
+-- ── Automated Table Creation (INFER_SCHEMA) ───────────────────
+-- Automatically detects all columns and data types directly from the CSV in S3
+CREATE TABLE IF NOT EXISTS RAW.raw_orders
+USING TEMPLATE (
+    SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*))
+    FROM TABLE(
+        INFER_SCHEMA(
+            LOCATION => '@RAW.s3_csv_stage',
+            FILE_FORMAT => 'RAW.csv_format'
+        )
+    )
+);
+
+-- Add metadata column to track load timing for auditability
+ALTER TABLE RAW.raw_orders 
+ADD COLUMN IF NOT EXISTS _loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP();
+
+-- ── Load CSV into Bronze Table ───────────────────────────────
+-- MATCH_BY_COLUMN_NAME guarantees safe loading even if CSV column order shifts
+COPY INTO RAW.raw_orders
+FROM @RAW.s3_csv_stage
+FILE_FORMAT = (FORMAT_NAME = 'RAW.csv_format')
+MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+ON_ERROR = 'CONTINUE';
+
+-- ── Verify Bronze Load ───────────────────────────────────────
+SELECT COUNT(*) AS total_rows_loaded FROM RAW.raw_orders;
+SELECT *        FROM RAW.raw_orders LIMIT 5;
