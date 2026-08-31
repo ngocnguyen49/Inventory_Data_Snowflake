@@ -77,16 +77,20 @@ FROM ANALYTICS.fact_orders
 GROUP BY customer_id, customer_name, segment, region;
 
 -- ── Step 4: Verify all Gold tables ───────────────────────────
-SELECT 'agg_data_quality_summary'  AS table_name, 
-       COUNT(*)                    AS rows 
+SELECT 'agg_data_quality_summary' AS table_name, 
+       COUNT(*)                   AS row_count 
 FROM ANALYTICS.agg_data_quality_summary
+
 UNION ALL
-SELECT 'agg_monthly_sales'         AS table_name, 
-       COUNT(*)                    AS rows 
+
+SELECT 'agg_monthly_sales'        AS table_name, 
+       COUNT(*)                   AS row_count 
 FROM ANALYTICS.agg_monthly_sales
+
 UNION ALL
-SELECT 'agg_customer_summary'      AS table_name, 
-       COUNT(*)                    AS rows 
+
+SELECT 'agg_customer_summary'     AS table_name, 
+       COUNT(*)                   AS row_count 
 FROM ANALYTICS.agg_customer_summary;
 
 -- ── Step 5: Preview Gold tables ───────────────────────────────
