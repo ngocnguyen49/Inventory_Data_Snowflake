@@ -24,46 +24,55 @@ USE SCHEMA RAW;
 -- ── External S3 Stage Setup ──────────────────────────────────
 -- Replace placeholders with your S3 URI and AWS IAM credentials
 CREATE OR REPLACE STAGE RAW.s3_csv_stage
-    URL = 's3://your-bucket-name/path/to/files/'
+    URL = 's3://my-snowflake-sales-pipeline-data/10.-Retail-Supply-Chain-Sales-Analysis_Challenge-10 - Retails Order Full Dataset.csv'
     CREDENTIALS = (
-        AWS_KEY_ID = 'YOUR_AWS_ACCESS_KEY_ID'
-        AWS_SECRET_KEY = 'YOUR_AWS_SECRET_ACCESS_KEY'
+        AWS_KEY_ID = 'AKIASLSTLIM3B7QDMDLV'
+        AWS_SECRET_KEY = '5IyowsMYZcia3dZgY9Sv6h3rPcmc5pM+I6NRKKAr'
     );
 
 -- ── Named File Format Setup ───────────────────────────────────
--- Required for INFER_SCHEMA to accurately parse headers and fields
+-- PARSE_HEADER = TRUE reads first row as column names
+-- Required for INFER_SCHEMA and MATCH_BY_COLUMN_NAME to work
 CREATE OR REPLACE FILE FORMAT RAW.csv_format
     TYPE                         = 'CSV'
     FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    SKIP_HEADER                  = 1
+    PARSE_HEADER                 = TRUE
     NULL_IF                      = ('NULL', 'null', '')
     EMPTY_FIELD_AS_NULL          = TRUE;
 
--- ── Automated Table Creation (INFER_SCHEMA) ───────────────────
--- Automatically detects all columns and data types directly from the CSV in S3
-CREATE TABLE IF NOT EXISTS RAW.raw_orders
+-- ── Step 1: Drop and recreate table from INFER_SCHEMA ─────────
+-- Always drop first to avoid column mismatch errors on re-runs
+DROP TABLE IF EXISTS RAW.raw_orders;
+
+CREATE TABLE RAW.raw_orders
 USING TEMPLATE (
     SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*))
     FROM TABLE(
         INFER_SCHEMA(
-            LOCATION => '@RAW.s3_csv_stage',
+            LOCATION    => '@RAW.s3_csv_stage',
             FILE_FORMAT => 'RAW.csv_format'
         )
     )
 );
 
--- Add metadata column to track load timing for auditability
-ALTER TABLE RAW.raw_orders 
-ADD COLUMN IF NOT EXISTS _loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP();
-
--- ── Load CSV into Bronze Table ───────────────────────────────
--- MATCH_BY_COLUMN_NAME guarantees safe loading even if CSV column order shifts
+-- ── Step 2: Load CSV into Bronze ──────────────────────────────
+-- Add _loaded_at AFTER table creation to avoid column mismatch
+-- MATCH_BY_COLUMN_NAME handles any column order in CSV safely
 COPY INTO RAW.raw_orders
 FROM @RAW.s3_csv_stage
 FILE_FORMAT = (FORMAT_NAME = 'RAW.csv_format')
 MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
 ON_ERROR = 'CONTINUE';
 
--- ── Verify Bronze Load ───────────────────────────────────────
+-- ── Step 3: Add audit metadata column after load ──────────────
+-- Must be added AFTER COPY INTO to avoid column count mismatch
+ALTER TABLE RAW.raw_orders
+ADD COLUMN IF NOT EXISTS _loaded_at TIMESTAMP_NTZ;
+
+UPDATE RAW.raw_orders
+SET _loaded_at = CURRENT_TIMESTAMP()
+WHERE _loaded_at IS NULL;
+
+-- ── Step 4: Verify Bronze load ────────────────────────────────
 SELECT COUNT(*) AS total_rows_loaded FROM RAW.raw_orders;
 SELECT *        FROM RAW.raw_orders LIMIT 5;
