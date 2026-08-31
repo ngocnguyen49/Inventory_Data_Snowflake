@@ -49,37 +49,38 @@ FROM RAW.raw_orders;
 
 -- CHECK 3: Null check on critical columns
 SELECT
-    'Null Check'            AS check_name,
-    SUM(CASE WHEN order_id   IS NULL THEN 1 ELSE 0 END) AS null_order_id,
-    SUM(CASE WHEN order_date IS NULL THEN 1 ELSE 0 END) AS null_order_date,
-    SUM(CASE WHEN sales      IS NULL THEN 1 ELSE 0 END) AS null_sales,
-    SUM(CASE WHEN profit     IS NULL THEN 1 ELSE 0 END) AS null_profit,
-    SUM(CASE WHEN quantity   IS NULL THEN 1 ELSE 0 END) AS null_quantity,
+    'Null Check' AS check_name,
+    SUM(CASE WHEN "Order ID" IS NULL THEN 1 ELSE 0 END) AS null_order_id,
+    SUM(CASE WHEN "Order Date" IS NULL THEN 1 ELSE 0 END) AS null_order_date,
+    SUM(CASE WHEN "Sales" IS NULL THEN 1 ELSE 0 END) AS null_sales,
+    SUM(CASE WHEN "Profit" IS NULL THEN 1 ELSE 0 END) AS null_profit,
+    SUM(CASE WHEN "Quantity" IS NULL THEN 1 ELSE 0 END) AS null_quantity,
     CASE WHEN
-        SUM(CASE WHEN order_id   IS NULL THEN 1 ELSE 0 END) = 0
-        AND SUM(CASE WHEN order_date IS NULL THEN 1 ELSE 0 END) = 0
-        AND SUM(CASE WHEN sales  IS NULL THEN 1 ELSE 0 END) = 0
-        AND SUM(CASE WHEN profit IS NULL THEN 1 ELSE 0 END) = 0
-        AND SUM(CASE WHEN quantity IS NULL THEN 1 ELSE 0 END) = 0
+        SUM(CASE WHEN "Order ID" IS NULL THEN 1 ELSE 0 END) = 0
+        AND SUM(CASE WHEN "Order Date" IS NULL THEN 1 ELSE 0 END) = 0
+        AND SUM(CASE WHEN "Sales" IS NULL THEN 1 ELSE 0 END) = 0
+        AND SUM(CASE WHEN "Profit" IS NULL THEN 1 ELSE 0 END) = 0
+        AND SUM(CASE WHEN "Quantity" IS NULL THEN 1 ELSE 0 END) = 0
         THEN 'PASS ✅' ELSE 'FAIL ❌'
-    END                     AS result
+    END AS result
 FROM RAW.raw_orders;
 
 -- CHECK 4: Negative sales
 SELECT
-    'Negative Sales'        AS check_name,
-    SUM(CASE WHEN TRY_CAST(sales AS FLOAT) < 0 THEN 1 ELSE 0 END) AS negative_count,
-    CASE WHEN SUM(CASE WHEN TRY_CAST(sales AS FLOAT) < 0 THEN 1 ELSE 0 END) = 0
+    'Negative Sales' AS check_name,
+    SUM(CASE WHEN "Sales" < 0 THEN 1 ELSE 0 END) AS negative_count,
+    CASE WHEN SUM(CASE WHEN "Sales" < 0 THEN 1 ELSE 0 END) = 0
          THEN 'PASS ✅' ELSE 'FAIL ❌'
-    END                     AS result
+    END AS result
 FROM RAW.raw_orders;
 
 -- CHECK 5: Date range sanity
+ALTER SESSION SET DATE_INPUT_FORMAT = 'MM/DD/YYYY';
 SELECT
     'Date Range'            AS check_name,
-    MIN(TRY_TO_DATE(order_date, 'MM/DD/YYYY')) AS earliest_order,
-    MAX(TRY_TO_DATE(order_date, 'MM/DD/YYYY')) AS latest_order,
-    CASE WHEN MIN(TRY_TO_DATE(order_date, 'MM/DD/YYYY')) IS NOT NULL
+    MIN(TRY_TO_DATE("Order Date")) AS earliest_order,
+    MAX(TRY_TO_DATE("Order Date")) AS latest_order,
+    CASE WHEN MIN(TRY_TO_DATE("Order Date")) IS NOT NULL
          THEN 'PASS ✅' ELSE 'FAIL ❌'
     END                     AS result
 FROM RAW.raw_orders;
@@ -108,22 +109,22 @@ SELECT * FROM (
     FROM RAW.raw_orders
     UNION ALL
     SELECT 'No Null Order IDs',
-           CASE WHEN SUM(CASE WHEN order_id IS NULL THEN 1 ELSE 0 END) = 0
+           CASE WHEN SUM(CASE WHEN "Order ID" IS NULL THEN 1 ELSE 0 END) = 0
                 THEN 'PASS ✅' ELSE 'FAIL ❌' END
     FROM RAW.raw_orders
     UNION ALL
     SELECT 'No Null Sales',
-           CASE WHEN SUM(CASE WHEN sales IS NULL THEN 1 ELSE 0 END) = 0
+           CASE WHEN SUM(CASE WHEN "Sales" IS NULL THEN 1 ELSE 0 END) = 0
                 THEN 'PASS ✅' ELSE 'FAIL ❌' END
     FROM RAW.raw_orders
     UNION ALL
     SELECT 'No Negative Sales',
-           CASE WHEN SUM(CASE WHEN TRY_CAST(sales AS FLOAT) < 0 THEN 1 ELSE 0 END) = 0
+           CASE WHEN SUM(CASE WHEN "Sales" < 0 THEN 1 ELSE 0 END) = 0
                 THEN 'PASS ✅' ELSE 'FAIL ❌' END
     FROM RAW.raw_orders
     UNION ALL
     SELECT 'Valid Dates',
-           CASE WHEN SUM(CASE WHEN TRY_TO_DATE(order_date, 'MM/DD/YYYY') IS NULL THEN 1 ELSE 0 END) = 0
+           CASE WHEN SUM(CASE WHEN TRY_TO_DATE("Order Date") IS NULL THEN 1 ELSE 0 END) = 0
                 THEN 'PASS ✅' ELSE 'FAIL ❌' END
     FROM RAW.raw_orders
     UNION ALL
@@ -139,71 +140,68 @@ ORDER BY check_name;
 CREATE OR REPLACE VIEW ANALYTICS.stg_orders AS
 SELECT
     -- IDs
-    TRIM(row_id)                                        AS row_id,
-    TRIM(order_id)                                      AS order_id,
-    TRIM(customer_id)                                   AS customer_id,
-    TRIM(product_id)                                    AS product_id,
+    TRIM("Row ID")                                        AS row_id,
+    TRIM("Order ID")                                      AS order_id,
+    TRIM("Customer ID")                                   AS customer_id,
+    TRIM("Product ID")                                    AS product_id,
 
-    -- Dates — cast from string to date
-    TRY_TO_DATE(order_date, 'MM/DD/YYYY')               AS order_date,
-    TRY_TO_DATE(ship_date, 'MM/DD/YYYY')                AS ship_date,
+    -- Dates
+    "Order Date"::DATE                                    AS order_date,
+    "Ship Date"::DATE                                     AS ship_date,
 
     -- Derived date columns for Gold aggregations
-    EXTRACT(YEAR  FROM TRY_TO_DATE(order_date, 'MM/DD/YYYY')) AS order_year,
-    EXTRACT(MONTH FROM TRY_TO_DATE(order_date, 'MM/DD/YYYY')) AS order_month,
+    EXTRACT(YEAR  FROM "Order Date"::DATE)                AS order_year,
+    EXTRACT(MONTH FROM "Order Date"::DATE)                AS order_month,
 
     -- Shipping
-    TRIM(ship_mode)                                     AS ship_mode,
-    DATEDIFF('day',
-        TRY_TO_DATE(order_date, 'MM/DD/YYYY'),
-        TRY_TO_DATE(ship_date,  'MM/DD/YYYY'))          AS days_to_ship,
+    TRIM("Ship Mode")                                     AS ship_mode,
+    DATEDIFF('day', "Order Date"::DATE, "Ship Date"::DATE) AS days_to_ship,
 
     -- Customer
-    TRIM(customer_name)                                 AS customer_name,
-    TRIM(segment)                                       AS segment,
+    TRIM("Customer Name")                                 AS customer_name,
+    TRIM("Segment")                                       AS segment,
 
     -- Location
-    TRIM(country)                                       AS country,
-    TRIM(city)                                          AS city,
-    TRIM(state)                                         AS state,
-    TRIM(postal_code)                                   AS postal_code,
-    TRIM(region)                                        AS region,
+    TRIM("Country")                                       AS country,
+    TRIM("City")                                          AS city,
+    TRIM("State")                                         AS state,
+    TRIM("Postal Code")                                   AS postal_code,
+    TRIM("Region")                                        AS region,
 
     -- People
-    TRIM(retail_sales_people)                           AS retail_sales_people,
+    TRIM("Retail Sales People")                           AS retail_sales_people,
 
     -- Product
-    TRIM(category)                                      AS category,
-    TRIM(sub_category)                                  AS sub_category,
-    TRIM(product_name)                                  AS product_name,
+    TRIM("Category")                                      AS category,
+    TRIM("Sub-Category")                                  AS sub_category,
+    TRIM("Product Name")                                  AS product_name,
 
     -- Returns
-    CASE WHEN UPPER(TRIM(returned)) = 'YES'
-         THEN TRUE ELSE FALSE END                       AS is_returned,
+    CASE WHEN UPPER(TRIM("Returned")) = 'YES'
+         THEN TRUE ELSE FALSE END                         AS is_returned,
 
-    -- Numerics — safe cast
-    TRY_CAST(sales    AS FLOAT)                         AS sales,
-    TRY_CAST(profit   AS FLOAT)                         AS profit,
-    TRY_CAST(quantity AS INT)                           AS quantity,
-    TRY_CAST(discount AS FLOAT)                         AS discount,
+    -- Numerics
+    "Sales"::FLOAT                                        AS sales,
+    "Profit"::FLOAT                                       AS profit,
+    "Quantity"::INT                                       AS quantity,
+    "Discount"::FLOAT                                     AS discount,
 
     -- Derived business metrics
     ROUND(
-        TRY_CAST(profit AS FLOAT) /
-        NULLIF(TRY_CAST(sales AS FLOAT), 0) * 100
-    , 2)                                                AS profit_margin_pct,
+        "Profit"::FLOAT / NULLIF("Sales"::FLOAT, 0) * 100
+    , 2)                                                  AS profit_margin_pct,
 
     -- Lineage timestamps
-    _loaded_at                                          AS _bronze_loaded_at,
-    CURRENT_TIMESTAMP()                                 AS _silver_processed_at
+    _loaded_at                                            AS _bronze_loaded_at,
+    CURRENT_TIMESTAMP()                                   AS _silver_processed_at
 
 FROM RAW.raw_orders
 
--- Exclude rows where critical business columns failed to cast
-WHERE TRY_CAST(sales    AS FLOAT) IS NOT NULL
-  AND TRY_CAST(profit   AS FLOAT) IS NOT NULL
-  AND TRY_CAST(quantity AS INT)   IS NOT NULL
-  AND TRY_TO_DATE(order_date, 'MM/DD/YYYY') IS NOT NULL;
+-- Exclude rows where critical business columns are missing
+WHERE "Sales" IS NOT NULL
+  AND "Profit" IS NOT NULL
+  AND "Quantity" IS NOT NULL
+  AND "Order Date" IS NOT NULL;
 
 -- ── Step 5: Materialize Silver ────────────────────────────────
 -- Physical table for Gold to build on — faster than querying view
